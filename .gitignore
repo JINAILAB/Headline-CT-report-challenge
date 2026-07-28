@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+.venvs/
+uv.lock
+
+# Data — never commit. Point HEADLINE_DATA_ROOT at it instead.
+# Leading slash matters: an unanchored `data/` would also hide src/headline/data/.
+/data/
+!/data/.gitkeep
+
+# Third-party weights (licence-restricted; see docs/DATA.md)
+/models/
+/refs/
+/third_party/
+
+# Run outputs
+/runs/
+/wandb/
+*.log
+
+# Checkpoints / large artefacts
+*.pt
+*.pth
+*.safetensors
+*.bread
+*.nii.gz
+*.npy
+*.csv
+!splits/*.example.json
+
+# Internal validation split — generated from the dataset, not redistributed
+splits/vlm_val_patients.json
+
+.DS_Store

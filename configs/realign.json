@@ -1,0 +1,17 @@
+{
+  "epochs": 5,
+  "bs": 16,
+  "accum": 2,
+  "enc_lr": 2e-5,
+  "head_lr": 3e-4,
+  "warmup_frac": 0.05,
+  "lam_local": 0.3,
+  "lam_presence": 0.5,
+  "sim_mode": "label",
+  "mask_temporal": true,
+  "neg_k": 512,
+  "bank_max": 4096,
+  "grad_clip": 5.0,
+  "workers": 12,
+  "seed": 42
+}

@@ -1,0 +1,18 @@
+{
+  "stage": 2,
+  "epochs": 1,
+  "lr": 2e-5,
+  "accum_steps": 8,
+  "warmup_ratio": 0.03,
+  "max_tokens": 3072,
+  "max_bs": 8,
+  "megabatch_size": 256,
+  "region_dropout": 0.5,
+  "eval_every": 400,
+  "val_gen_n": 600,
+  "val_loss_batches": 128,
+  "val_max_new": 1024,
+  "gen_bs": 16,
+  "workers": 4,
+  "seed": 42
+}
