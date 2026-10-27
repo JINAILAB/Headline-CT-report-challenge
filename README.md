@@ -1,50 +1,127 @@
-# HEADLINE: Finding-Aware Head CT Report Generation
+<h1 align="center">[MICCAI'26] Finding-Aware Head CT Report Generation</h1>
 
-Reference implementation of our system for the MICCAI 2026 HEADLINE Challenge.
+<p align="center">
+Contrastive re-alignment of a head CT encoder with radiology reports,<br>
+and a LoRA-tuned report generator built on top of it
+</p>
 
-This repository contains code for:
+<p align="center">
+<a href="#citation"><img alt="MICCAI 2026 HEADLINE Challenge: 2nd place" src="https://img.shields.io/badge/MICCAI%202026%20HEADLINE-2nd%20place-C0392B"></a>
+<a href="#citation"><img alt="LNCS: MICCAI 2026 Satellite Events" src="https://img.shields.io/badge/LNCS-MICCAI%202026%20Satellite%20Events-1C3F7D"></a>
+<a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-2B7BD1"></a>
+<img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB">
+</p>
+
+<p align="center">
+<a href="#method">Method</a> ·
+<a href="#results">Results</a> ·
+<a href="#installation">Installation</a> ·
+<a href="#data">Data</a> ·
+<a href="#training">Training</a> ·
+<a href="#evaluation">Evaluation</a> ·
+<a href="docs/DATA.md">Data preparation</a> ·
+<a href="#citation">Citation</a>
+</p>
+
+![System overview: (a) the head CT encoder is re-aligned to report representations under global, local, and finding-presence objectives; (b) features from the frozen re-aligned encoder are tokenized and passed to a LoRA-adapted Qwen2.5-7B-Instruct that writes the Findings and Assessment](assets/overview.png)
+
+## Overview
+
+This repository contains the code for the paper
+*Finding-Aware Contrastive Re-Alignment for Head CT Report Generation*
+(MICCAI 2026 Satellite Events, Lecture Notes in Computer Science), our
+2nd-place system in the MICCAI 2026 HEADLINE Challenge. HEADLINE asks for
+the free-text report of a non-contrast head CT study, a Findings narrative
+and an Assessment, as a radiologist would write it.
+
+Clinically important head CT findings are often small and low-contrast, and
+a language model cannot report a finding that the visual encoder has failed
+to represent. We therefore adapt the encoder to head CT reports before
+training the generator. The repository covers:
 
 * realigning a pretrained head CT encoder with radiology reports;
 * training visual tokenization modules for report generation;
 * fine-tuning Qwen2.5-7B-Instruct with LoRA; and
 * evaluating generated reports using S_Auto and CORE7 presence-F1.
 
-## Overview
+## Method
 
-The pipeline consists of four stages:
+**(a) Contrastive re-alignment of the encoder.** The general-CT encoder
+Pillar-0 is re-aligned to the reports with three objectives, combined as
+`L = L_global + 0.3 · L_local + 0.5 · L_presence`:
 
-1. Prepare region masks and report-derived finding labels.
-2. Realign the Pillar-0 encoder with radiology reports.
-3. Train the report-generation model.
-4. Generate reports and compute evaluation metrics.
+| Objective | What it aligns |
+|---|---|
+| Global study–report alignment | SigLIP-style loss between the study embedding and its report embedding; reports with similar finding-presence vectors count as positives |
+| Local patch–finding alignment | Image patches against the individual sentences of the Findings section |
+| Finding-presence supervision | Class-balanced BCE on 20 finding labels extracted from the report |
 
-```text
-HEADLINE data
-    │
-    ├── Anatomical and hemorrhage masks
-    ├── Structured finding labels
-    ├── Text embedding cache
-    └── Patch embedding cache
-            │
-            ▼
-    Encoder realignment
-            │
-            ▼
-    Visual tokenization training
-            │
-            ▼
-    LoRA fine-tuning
-            │
-            ▼
-    Report generation and evaluation
+Report and finding-statement embeddings come from a frozen
+Qwen3-Embedding-8B; finding labels are extracted from the free-text reports
+with gpt-oss-120b. Seven of the 20 labels (CORE7: hemorrhage, infarct,
+fracture, mass, mass effect, midline shift, hydrocephalus) are used for
+evaluation.
+
+**(b) Report generation.** The re-aligned encoder is frozen. Its features
+pass through a global tokenizer (a Perceiver-style resampler across all
+scales) and a region tokenizer that mean-pools features within 18 region
+masks derived from TotalSegmentator and Viola-Unet. The resulting visual tokens and the task
+prompt are fed to Qwen2.5-7B-Instruct with LoRA.
+
+```mermaid
+flowchart LR
+    subgraph prep["Data preparation"]
+        direction TB
+        M[Region masks<br/>TotalSegmentator, Viola-Unet]
+        L[Finding labels<br/>gpt-oss-120b]
+        C[Text and patch caches<br/>Qwen3-Embedding-8B, Pillar-0]
+    end
+    subgraph train["Training"]
+        direction TB
+        R[1 · Encoder re-alignment] --> S1[2 · Visual tokenizers] --> S2[3 · LoRA fine-tuning]
+    end
+    E[4 · Report generation<br/>S_Auto, CORE7 presence-F1]
+    L --> R
+    C --> R
+    M --> S1
+    S2 --> E
 ```
 
-The report generator uses:
+## Results
 
-* a frozen or realigned Pillar-0 head CT encoder;
-* a Perceiver resampler;
-* a region tokenizer; and
-* Qwen2.5-7B-Instruct with LoRA.
+All numbers are on a 600-study internal validation split of the HEADLINE
+training data (paper Tables 1 and 2), not on the challenge test set.
+
+**Encoder-level finding discrimination.** The baseline Pillar-0 encoder and
+the re-aligned encoder are compared with an identical classifier head;
+F1 is reported at the per-finding optimal threshold, and *n* is the number
+of positive studies.
+
+| Finding | *n* | AUROC (baseline) | AUROC (re-aligned) | F1 (baseline) | F1 (re-aligned) |
+|---|---:|---:|---:|---:|---:|
+| Hemorrhage | 203 | 0.862 | **0.908** | 0.727 | **0.805** |
+| Infarct | 143 | 0.716 | **0.798** | 0.489 | **0.565** |
+| Fracture | 24 | 0.789 | **0.874** | 0.333 | **0.500** |
+| Mass | 74 | 0.701 | **0.775** | 0.363 | **0.464** |
+| Mass effect | 114 | 0.858 | **0.899** | 0.610 | **0.667** |
+| Midline shift | 91 | 0.858 | **0.900** | 0.566 | **0.638** |
+| Hydrocephalus | 24 | 0.791 | **0.837** | **0.308** | 0.300 |
+| **Macro** | | 0.796 | **0.856** | 0.485 | **0.563** |
+
+**Generated-report performance.** Replacing the baseline encoder with the
+re-aligned one, with the generator configuration fixed:
+
+| Encoder | S_Auto | Report presence-F1 |
+|---|---:|---:|
+| Baseline | 0.194 | 0.130 |
+| Re-aligned | **0.210** | **0.328** |
+
+S_Auto = 0.7 · BERTScore-F1 + 0.1 · (METEOR + ROUGE-L + BLEU-4). The report
+presence-F1 compares the seven core findings extracted from the generated
+and reference reports and involves no threshold selection. It stays below
+the encoder presence-F1 of the same representation (0.328 vs 0.563), which
+points to a gap between what the encoder represents and what the generator
+reports.
 
 ## Requirements
 
@@ -252,8 +329,35 @@ The smoke test verifies the main data-loading and report-generation code paths w
 * [`docs/DATA.md`](docs/DATA.md): dataset preparation, checkpoints, and licenses
 * [`env/README.md`](env/README.md): isolated preprocessing environments
 
+## Citation
+
+```bibtex
+@inproceedings{park2026headline,
+  title     = {Finding-Aware Contrastive Re-Alignment for Head CT Report Generation},
+  author    = {Park, Jinyong and Kim, Yong Soo and Jo, Nathan and Kim, Sejoong},
+  booktitle = {Medical Image Computing and Computer Assisted Intervention --
+               MICCAI 2026 Satellite Events},
+  series    = {Lecture Notes in Computer Science},
+  publisher = {Springer Nature Switzerland},
+  year      = {2026}
+}
+```
+
+Volume, page, and DOI information will be added once the proceedings are published.
+
 ## License
 
-The source code is distributed under the terms described in [`LICENSE`](LICENSE).
+Code is released under the [Apache License 2.0](LICENSE). The HEADLINE
+dataset, model checkpoints, and external tools are governed by their own
+licenses; none of their data or weights are redistributed through this
+repository.
 
-The HEADLINE dataset, pretrained model checkpoints, TotalSegmentator, and Viola-Unet are governed by their respective licenses. Their data and weights are not redistributed through this repository.
+| Component | License or access | Notes |
+|---|---|---|
+| HEADLINE dataset | Terms set by the challenge organisers | Not included; see [Data](#data) |
+| Pillar-0, Qwen2.5-7B-Instruct, Qwen3-Embedding-8B, gpt-oss-120b | Terms on each model card | Downloaded separately |
+| TotalSegmentator `brain_structures` | Academic, non-commercial; license key required | `craniofacial_structures` is Apache-2.0 |
+| Viola-Unet weights | CC BY-NC-ND | Extracted from the `violai:3.1` Docker image |
+
+Setup instructions for the masks, labels, and caches are in
+[`docs/DATA.md`](docs/DATA.md).

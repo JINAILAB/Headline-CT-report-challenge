@@ -1,0 +1,8 @@
+Finding-Aware Contrastive Re-Alignment for Head CT Report Generation
+Copyright 2026 Jinyong Park, Yong Soo Kim, Nathan Jo, and Sejoong Kim
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The HEADLINE dataset, third-party model weights (Pillar-0, Qwen2.5-7B-Instruct,
+Qwen3-Embedding-8B, gpt-oss-120b, Viola-Unet), and TotalSegmentator are not
+distributed with this product and remain under their own licenses.
